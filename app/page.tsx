@@ -1,5 +1,5 @@
-import Header from "../components/Header"
-import Link from "next/link"
+import Header from './components/Header'
+import Link from 'next/link'
 
 export default function Home() {
   return (
@@ -13,10 +13,7 @@ export default function Home() {
             <Link href="/login" className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded mr-4">
               Get Started
             </Link>
-            <Link
-              href="/leaderboard"
-              className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded"
-            >
+            <Link href="/leaderboard" className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
               View Leaderboard
             </Link>
           </div>
@@ -25,4 +22,3 @@ export default function Home() {
     </div>
   )
 }
-
