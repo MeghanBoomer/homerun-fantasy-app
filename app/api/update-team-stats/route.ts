@@ -84,7 +84,7 @@ export async function POST() {
           let totalHR = 0
           const playerHRs = []
 
-          teamPlayers.forEach((player) => {
+          teamPlayers.forEach((player: any) => {
             if (player && player.id) {
               // Find the player's current stats by matching player ID or name
               const playerStats = mlbStats.find(

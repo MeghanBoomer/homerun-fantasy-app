@@ -98,8 +98,8 @@ export async function GET(request: Request) {
 }
 
 // Generate simulated home run data for debugging
-function generateSimulatedHomeRuns(playerIds) {
-  const playerMap = {
+function generateSimulatedHomeRuns(playerIds: string[]) {
+  const playerMap: Record<string, { name: string; team: string }> = {
     p592450: { name: "Aaron Judge", team: "NYY" },
     p660271: { name: "Shohei Ohtani", team: "LAD" },
     p624413: { name: "Pete Alonso", team: "NYM" },

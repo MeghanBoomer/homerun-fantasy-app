@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     const allPlayerIds = new Set<string>()
 
     teamsSnapshot.forEach((doc) => {
-      const team = doc.data()
+      const team: any = doc.data()
       if (team.players) {
         // Add all player IDs from the team
         if (team.players.tier1Player?.id) allPlayerIds.add(team.players.tier1Player.id)

@@ -55,7 +55,7 @@ export async function GET(request: Request) {
 
     // Update each team's stats
     teamsSnapshot.forEach((doc) => {
-      const team = doc.data()
+      const team: any = doc.data()
       const teamPlayers = [
         team.players.tier1Player,
         team.players.tier2Player,
@@ -69,7 +69,7 @@ export async function GET(request: Request) {
       let totalHR = 0
       const playerHRs = []
 
-      teamPlayers.forEach((player) => {
+      teamPlayers.forEach((player: any) => {
         if (player && player.id) {
           const playerStats = players.find((p) => p.id === player.id)
           const hr = playerStats ? playerStats.hr2025 : 0 // Use hr2025 for the 2025 season

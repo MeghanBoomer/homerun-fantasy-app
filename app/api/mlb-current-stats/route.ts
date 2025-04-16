@@ -51,7 +51,7 @@ export async function GET() {
     // Process the MLB data
     let players = []
     if (mlbData.leagueLeaders && mlbData.leagueLeaders.length > 0 && mlbData.leagueLeaders[0].leaders) {
-      players = mlbData.leagueLeaders[0].leaders.map((leader) => ({
+      players = mlbData.leagueLeaders[0].leaders.map((leader: any) => ({
         id: `p${leader.person.id}`,
         name: leader.person.fullName,
         team: leader.team?.abbreviation || leader.team?.name || "Unknown",

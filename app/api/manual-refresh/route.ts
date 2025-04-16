@@ -19,7 +19,7 @@ export async function POST() {
         const playerHRs = team.playerHRs || [0, 0, 0, 0, 0, 0]
 
         // Calculate total HRs - ensure we're using Number to handle any string values
-        const totalHR = playerHRs.reduce((sum, hr) => sum + (Number(hr) || 0), 0)
+        const totalHR = playerHRs.reduce((sum: number, hr: any) => sum + (Number(hr) || 0), 0)
         console.log(`Team ${team.teamName}: playerHRs = ${JSON.stringify(playerHRs)}, totalHR = ${totalHR}`)
 
         // Update the team document
