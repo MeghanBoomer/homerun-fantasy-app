@@ -25,7 +25,7 @@ export async function GET() {
     const playerHRs = [2, 1, 1, 2, 1, 1] // Total: 8
 
     // Calculate total HRs
-    const totalHR = playerHRs.reduce((sum, hr) => sum + hr, 0)
+    const totalHR = playerHRs.reduce((sum: number, hr: number) => sum + hr, 0)
 
     console.log(`Updating team ${team.teamName}: playerHRs = ${JSON.stringify(playerHRs)}, totalHR = ${totalHR}`)
 

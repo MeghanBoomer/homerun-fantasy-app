@@ -100,7 +100,7 @@ export async function getHomeRunLeaders(season = 2025, limit = 100) {
   let players = []
 
   if (data.leagueLeaders && data.leagueLeaders.length > 0 && data.leagueLeaders[0].leaders) {
-    players = data.leagueLeaders[0].leaders.map((leader) => ({
+    players = data.leagueLeaders[0].leaders.map((leader: any) => ({
       id: `p${leader.person.id}`,
       name: leader.person.fullName,
       team: leader.team?.abbreviation || leader.team?.name || "Unknown",

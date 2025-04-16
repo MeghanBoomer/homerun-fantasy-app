@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     let totalHR = 0
     const playerHRs = []
 
-    teamPlayers.forEach((player) => {
+    teamPlayers.forEach((player: any) => {
       if (player && player.id) {
         const playerStats = mlbPlayers.find((p) => p.id === player.id)
         const hr = playerStats ? playerStats.hr2025 : 0
