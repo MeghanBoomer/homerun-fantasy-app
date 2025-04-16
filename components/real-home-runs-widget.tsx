@@ -16,6 +16,14 @@ interface HomeRun {
   videoLink?: string
 }
 
+interface Player {
+  id: string
+  name: string
+  team: string
+  hr2025: number
+  position?: string
+}
+
 interface RealHomeRunsWidgetProps {
   playerIds: string[]
 }
@@ -54,8 +62,7 @@ export function RealHomeRunsWidget({ playerIds }: RealHomeRunsWidgetProps) {
       clearTimeout(timeoutId)
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `API responded with status: ${response.status}`)
+        throw new Error(`API responded with status: ${response.status}`)
       }
 
       const data = await response.json()
@@ -65,7 +72,7 @@ export function RealHomeRunsWidget({ playerIds }: RealHomeRunsWidgetProps) {
       } else {
         throw new Error(data.message || "Failed to fetch home run data")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching recent home runs:", error)
       setError(error.message || "Unable to load recent home runs")
       setRecentHomeRuns([])
@@ -103,8 +110,8 @@ export function RealHomeRunsWidget({ playerIds }: RealHomeRunsWidgetProps) {
       // Try the regular endpoint with debug flag
       const regularResponse = await fetch(`/api/real-home-runs?playerIds=${uniquePlayerIds.join(",")}&debug=true`)
       const regularData = await regularResponse.json()
-      setDebugInfo((prev) => ({ ...prev, regularApiResponse: regularData }))
-    } catch (error) {
+      setDebugInfo((prev: any) => ({ ...prev, regularApiResponse: regularData }))
+    } catch (error: any) {
       setDebugInfo({ error: error.message || "Error during debugging" })
     } finally {
       setIsDebugging(false)

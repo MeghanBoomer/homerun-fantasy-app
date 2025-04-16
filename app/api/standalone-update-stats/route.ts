@@ -36,7 +36,7 @@ export async function GET() {
       logger.info("MLB API data fetched successfully")
 
       if (mlbData.leagueLeaders && mlbData.leagueLeaders.length > 0 && mlbData.leagueLeaders[0].leaders) {
-        players = mlbData.leagueLeaders[0].leaders.map((leader) => ({
+        players = mlbData.leagueLeaders[0].leaders.map((leader: any) => ({
           id: `p${leader.person.id}`,
           name: leader.person.fullName,
           team: leader.team?.abbreviation || leader.team?.name || "Unknown",
@@ -76,7 +76,7 @@ export async function GET() {
         let totalHR = 0
         const playerHRs = []
 
-        teamPlayers.forEach((player) => {
+        teamPlayers.forEach((player: any) => {
           if (player && player.id) {
             // Find the player's current stats by matching player ID
             const playerStats = players.find((p) => p.id === player.id)

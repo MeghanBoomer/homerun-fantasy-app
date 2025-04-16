@@ -29,7 +29,7 @@ export async function GET() {
         if (data.people && Array.isArray(data.people)) {
           activePlayersData = data.people
           // Create a set of active player IDs for quick lookup
-          activePlayerIds = new Set(data.people.map((player) => player.id.toString()))
+          activePlayerIds = new Set(data.people.map((player: any) => player.id.toString()))
           console.log(`Found ${activePlayerIds.size} active players for ${currentYear}`)
         }
       } else {
@@ -59,7 +59,7 @@ export async function GET() {
 
         if (data.leagueLeaders && data.leagueLeaders.length > 0 && data.leagueLeaders[0].leaders) {
           // Get HR leaders for the current year (2025)
-          hrLeaders = data.leagueLeaders[0].leaders.map((leader) => ({
+          hrLeaders = data.leagueLeaders[0].leaders.map((leader: any) => ({
             id: `p${leader.person.id}`,
             name: leader.person.fullName,
             team: leader.team?.abbreviation || leader.team?.name || "Unknown",
@@ -82,7 +82,7 @@ export async function GET() {
     let wildcardPlayers: any[] = []
 
     if (activePlayersData.length > 0) {
-      wildcardPlayers = activePlayersData.map((player) => {
+      wildcardPlayers = activePlayersData.map((player: any) => {
         // Try to find this player in the HR leaders to get their 2025 HR count
         const hrLeader = hrLeaders.find((leader) => leader.id === `p${player.id}`)
 
