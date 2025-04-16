@@ -34,7 +34,8 @@ export default function ApiTestPage() {
           data = await response.json()
         } catch (error) {
           const jsonError = error as Error
-          // Now use jsonError.message safely
+          console.error("Error parsing JSON:", jsonError.message)
+          // Now jsonError.message can be used safely
         }
         setResult({
           success: true,

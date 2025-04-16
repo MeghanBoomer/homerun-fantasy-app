@@ -70,10 +70,11 @@ export default function DebugPage() {
       try {
         const data = await response.json()
         setMlbResult(data)
-      } catch (jsonError) {
+      } catch (error) {
+        const jsonError = error as Error
         const responseText = await response.text()
         throw new Error(
-          `Failed to parse MLB data as JSON: ${jsonError.message}. Response: ${responseText.substring(0, 200)}...`,
+          `Failed to parse MLB data as JSON: ${jsonError.message || "Unknown error"}. Response: ${responseText.substring(0, 200)}...`,
         )
       }
     } catch (error) {
