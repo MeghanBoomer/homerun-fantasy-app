@@ -35,7 +35,7 @@ export default function DebugStatsPage() {
       setUpdateResult(data)
     } catch (error) {
       console.error("Error updating stats:", error)
-      setUpdateResult({ error: error.message || "An unknown error occurred" })
+      setUpdateResult({ error: error instanceof Error ? error.message : "An unknown error occurred" })
     } finally {
       setIsUpdating(false)
     }
@@ -56,7 +56,7 @@ export default function DebugStatsPage() {
       const data = await response.json()
       setMlbResult(data)
     } catch (error) {
-      setMlbResult({ error: error.message || "An unknown error occurred" })
+      setMlbResult({ error: error instanceof Error ? error.message : "An unknown error occurred" })
     } finally {
       setIsTestingMlb(false)
     }

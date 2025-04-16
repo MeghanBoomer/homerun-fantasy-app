@@ -45,8 +45,8 @@ export default function DebugPage() {
     } catch (error) {
       console.error("Error updating stats:", error)
       setUpdateResult({
-        error: error.message || "An unknown error occurred",
-        stack: error.stack,
+        error: error instanceof Error ? error.message : "An unknown error occurred",
+        stack: error instanceof Error ? error.stack : undefined,
       })
     } finally {
       setIsUpdating(false)
@@ -77,7 +77,9 @@ export default function DebugPage() {
         )
       }
     } catch (error) {
-      setMlbResult({ error: error.message || "An unknown error occurred" })
+      setMlbResult({
+        error: error instanceof Error ? error.message : "An unknown error occurred",
+      })
     } finally {
       setIsTestingMlb(false)
     }
