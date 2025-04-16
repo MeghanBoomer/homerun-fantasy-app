@@ -166,11 +166,13 @@ export default function DebugPage() {
                   {updateResult.samplePlayers && updateResult.samplePlayers.length > 0 && (
                     <div className="mt-2 max-h-40 overflow-y-auto text-xs">
                       <p className="font-medium">Sample MLB Players:</p>
-                      {updateResult.samplePlayers.map((player, index) => (
-                        <div key={index} className="py-1 border-t border-border/30">
-                          {player.name} ({player.team}): {player.hr2025} HRs
-                        </div>
-                      ))}
+                      {updateResult.samplePlayers.map(
+                        (player: { name: string; team: string; hr2025: number }, index) => (
+                          <div key={index} className="py-1 border-t border-border/30">
+                            {player.name} ({player.team}): {player.hr2025} HRs
+                          </div>
+                        ),
+                      )}
                     </div>
                   )}
 
