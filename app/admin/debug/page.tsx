@@ -167,7 +167,7 @@ export default function DebugPage() {
                     <div className="mt-2 max-h-40 overflow-y-auto text-xs">
                       <p className="font-medium">Sample MLB Players:</p>
                       {updateResult.samplePlayers.map(
-                        (player: { name: string; team: string; hr2025: number }, index) => (
+                        (player: { name: string; team: string; hr2025: number }, index: number) => (
                           <div key={index} className="py-1 border-t border-border/30">
                             {player.name} ({player.team}): {player.hr2025} HRs
                           </div>
