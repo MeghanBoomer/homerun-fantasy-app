@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     logger.info("MLB data fetched successfully")
 
     // Process MLB data
-    const players = mlbData.leagueLeaders[0].leaders.map((leader) => ({
+    const players = mlbData.leagueLeaders[0].leaders.map((leader: any) => ({
       id: `p${leader.person.id}`,
       name: leader.person.fullName,
       team: leader.team?.abbreviation || leader.team?.name || "Unknown",
@@ -69,9 +69,9 @@ export async function GET(request: Request) {
       let totalHR = 0
       const playerHRs = []
 
-      teamPlayers.forEach((player: any) => {
+      teamPlayers.forEach((player: { id?: string; name?: string }) => {
         if (player && player.id) {
-          const playerStats = players.find((p) => p.id === player.id)
+          const playerStats = players.find((p: { id: string; hr2025: number }) => p.id === player.id)
           const hr = playerStats ? playerStats.hr2025 : 0 // Use hr2025 for the 2025 season
           totalHR += hr
           playerHRs.push(hr)

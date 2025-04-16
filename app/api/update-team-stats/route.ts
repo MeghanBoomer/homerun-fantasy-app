@@ -30,7 +30,7 @@ export async function POST() {
     // Process the MLB data
     let mlbStats = []
     if (mlbData.leagueLeaders && mlbData.leagueLeaders.length > 0 && mlbData.leagueLeaders[0].leaders) {
-      mlbStats = mlbData.leagueLeaders[0].leaders.map((leader) => ({
+      mlbStats = mlbData.leagueLeaders[0].leaders.map((leader: any) => ({
         id: `p${leader.person.id}`,
         name: leader.person.fullName,
         team: leader.team?.abbreviation || leader.team?.name || "Unknown",
@@ -84,11 +84,12 @@ export async function POST() {
           let totalHR = 0
           const playerHRs = []
 
-          teamPlayers.forEach((player: any) => {
+          teamPlayers.forEach((player: { id?: string; name?: string }) => {
             if (player && player.id) {
               // Find the player's current stats by matching player ID or name
               const playerStats = mlbStats.find(
-                (p) => p.id === player.id || p.name.toLowerCase() === player.name.toLowerCase(),
+                (p: { id: string; name: string }) =>
+                  p.id === player.id || p.name.toLowerCase() === player.name?.toLowerCase(),
               )
 
               // Use actual HR count or default to 0 if not found
