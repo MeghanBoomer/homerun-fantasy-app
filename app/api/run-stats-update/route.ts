@@ -1,39 +1,48 @@
 import { NextResponse } from "next/server"
-import { getBaseUrl } from "../../../lib/get-base-url"
+import { createLogger } from "../../../lib/logger"
 
-// This endpoint is a public wrapper for the update-team-stats API
+const logger = createLogger("run-stats-update")
+
+// This endpoint triggers an immediate update of all team stats
 export async function GET() {
   try {
-    // Get the base URL for API calls
-    const baseUrl = getBaseUrl()
+    logger.info("Manual stats update triggered via admin panel")
 
-    // Call the update-team-stats API
-    const response = await fetch(`${baseUrl}/api/update-team-stats`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    // Instead of trying to do everything in this endpoint,
+    // we'll call the standalone-update-stats endpoint which is more reliable
+    const response = await fetch(
+      new URL("/api/standalone-update-stats", process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").toString(),
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
       },
-    })
+    )
 
     if (!response.ok) {
-      throw new Error(`Failed to update stats: ${response.status} ${response.statusText}`)
+      const errorText = await response.text().catch(() => "Unknown error")
+      throw new Error(
+        `Failed to update stats: ${response.status} ${response.statusText} - ${errorText.substring(0, 100)}`,
+      )
     }
 
     const data = await response.json()
+    logger.info(`Stats update completed successfully: ${data.message || "No message"}`)
 
-    return NextResponse.json({
-      success: true,
-      message: "Team stats updated successfully",
-      details: data,
-    })
-  } catch (error: any) {
-    console.error("Error in run-stats-update:", error)
+    return NextResponse.json(data)
+  } catch (error) {
+    logger.error("Error in run-stats-update:", error)
+
+    // Return a more detailed error response
     return NextResponse.json(
       {
+        success: false,
         error: error.message || "An unknown error occurred",
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )
   }
 }
-

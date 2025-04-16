@@ -1,11 +1,12 @@
 {
-  "env": {
-    "VERCEL_URL": "homerun-fantasy.vercel.app"
-  },
   "crons": [
     {
-      "path": "/api/cron/update-home-runs?token=your-secret-token",
-      "schedule": "0 5 * * *"
+      "path": "/api/cron/update-home-runs",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/update-home-runs",
+      "schedule": "0 23 * * *"
     }
   ]
 }

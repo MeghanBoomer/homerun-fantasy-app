@@ -5,18 +5,30 @@ import { collection, getDocs, query } from "firebase/firestore"
 import { db, auth } from "../../lib/firebase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card"
 import { Badge } from "../../components/ui/badge"
-import { Loader2, Trophy, AlertCircle, Users, ArrowLeft, ChevronLeft, ChevronRight, Info, Star } from "lucide-react"
+import {
+  Loader2,
+  Trophy,
+  AlertCircle,
+  Users,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  Star,
+  BeerIcon,
+} from "lucide-react"
 import { Button } from "../../components/ui/button"
 import Link from "next/link"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../components/ui/tooltip"
 import { Separator } from "../../components/ui/separator"
 import { onAuthStateChanged } from "firebase/auth"
+import { useRouter } from "next/navigation"
 
 interface Player {
   id: string
   name: string
   team: string
-  hr2024: number
+  hr2025: number // Explicitly using 2025 data
   position?: string
 }
 
@@ -38,6 +50,8 @@ interface Team {
     wildcard2: Player
     wildcard3: Player
   }
+  playerHRs?: number[]
+  lastUpdated?: any
 }
 
 export default function LeaderboardsPage() {
@@ -48,27 +62,30 @@ export default function LeaderboardsPage() {
   const [error, setError] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const teamsPerPage = 10
 
-  // Get the upcoming season year (current year + 1 if we're past the World Series, which typically ends in October)
-  const getUpcomingSeasonYear = () => {
-    const now = new Date()
-    const currentYear = now.getFullYear()
-    const currentMonth = now.getMonth() // 0-based, so 9 = October
+  const router = useRouter()
 
-    // If we're in November or December, show next year's season
-    return currentMonth >= 10 ? currentYear + 1 : currentYear
+  // Get the current season year - explicitly set to 2025
+  const getCurrentSeasonYear = () => {
+    return 2025 // Explicitly set to 2025 for the current season
   }
 
-  const upcomingSeasonYear = getUpcomingSeasonYear()
+  const currentSeasonYear = getCurrentSeasonYear()
 
   useEffect(() => {
     // Check if user is logged in
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUserId(user.uid)
+
+        // Skip admin check for now - we'll assume non-admin to avoid permission errors
+        setIsAdmin(false)
       } else {
         setCurrentUserId(null)
+        setIsAdmin(false)
       }
     })
 
@@ -84,6 +101,41 @@ export default function LeaderboardsPage() {
     updateDisplayedTeams()
   }, [currentPage, teams, currentUserId])
 
+  // Auto-refresh stats every 60 seconds
+  useEffect(() => {
+    const refreshStats = async () => {
+      console.log("Auto-refreshing stats...")
+      router.refresh() // This will cause the page to re-fetch data from the server
+      fetchTeams()
+    }
+
+    // Initial refresh
+    refreshStats()
+
+    // Set up interval for future refreshes
+    const intervalId = setInterval(refreshStats, 60000) // 60 seconds
+
+    return () => clearInterval(intervalId)
+  }, [router])
+
+  // Calculate the sum of home runs for a team
+  const calculateTeamHomeRuns = (team: Team): number => {
+    // If playerHRs array exists, calculate the sum
+    if (team.playerHRs && team.playerHRs.length > 0) {
+      const sum = team.playerHRs.reduce((total, hr) => total + (Number(hr) || 0), 0)
+      console.log(`Team ${team.teamName} HR sum: ${sum}, playerHRs: ${JSON.stringify(team.playerHRs)}`)
+      return sum
+    }
+    // If actualHR is already set, use it
+    else if (team.actualHR !== undefined) {
+      return team.actualHR
+    }
+    // If neither exists, default to 0
+    else {
+      return 0
+    }
+  }
+
   const fetchTeams = async () => {
     setIsLoading(true)
     try {
@@ -94,37 +146,71 @@ export default function LeaderboardsPage() {
       const teamsData: Team[] = []
       querySnapshot.forEach((doc) => {
         const data = doc.data() as Omit<Team, "id">
-
-        // For demonstration, let's add some mock actual HR data
-        const mockActualHR = Math.floor(Math.random() * 30) + 10
-
         teamsData.push({
           id: doc.id,
           ...data,
-          actualHR: mockActualHR, // Mock data for demonstration
         } as Team)
       })
 
       console.log("Fetched teams:", teamsData.length)
 
-      // Sort by actualHR in descending order
-      teamsData.sort((a, b) => (b.actualHR || 0) - (a.actualHR || 0))
+      // Calculate total HRs for each team
+      const teamsWithCalculatedHRs = teamsData.map((team) => {
+        const totalHRs = calculateTeamHomeRuns(team)
+        console.log(
+          `Team ${team.teamName}: Total HRs = ${totalHRs}, playerHRs = ${JSON.stringify(team.playerHRs || [])}`,
+        )
+        return {
+          ...team,
+          actualHR: totalHRs,
+        }
+      })
 
-      // Add rank to each team
-      const rankedTeams = teamsData.map((team, index) => ({
-        ...team,
-        rank: index + 1,
-      }))
+      // Sort by actualHR in descending order
+      teamsWithCalculatedHRs.sort((a, b) => (b.actualHR || 0) - (a.actualHR || 0))
+
+      // Add rank to each team, handling ties correctly
+      const rankedTeams = []
+      let currentRank = 1
+      let previousHR = -1
+
+      for (let i = 0; i < teamsWithCalculatedHRs.length; i++) {
+        const team = teamsWithCalculatedHRs[i]
+        const teamHR = team.actualHR || 0
+
+        // If this is the first team or it has a different HR count than the previous team
+        if (i === 0 || teamHR !== previousHR) {
+          currentRank = i + 1
+        }
+
+        // Store the current HR for the next iteration
+        previousHR = teamHR
+
+        rankedTeams.push({
+          ...team,
+          rank: currentRank,
+        })
+      }
+
+      // Get the most recent update timestamp
+      if (teamsData.length > 0 && teamsData[0].lastUpdated) {
+        const timestamp = teamsData[0].lastUpdated.toDate ? teamsData[0].lastUpdated.toDate() : new Date()
+        setLastUpdated(
+          timestamp.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        )
+      }
 
       setTeams(rankedTeams)
       setError("")
     } catch (error: any) {
       console.error("Error fetching teams:", error)
       setError("Failed to load leaderboard data. Please try again later.")
-
-      // Use mock data if Firestore fails
-      const mockTeams = generateMockTeams(25)
-      setTeams(mockTeams)
     } finally {
       setIsLoading(false)
     }
@@ -174,76 +260,6 @@ export default function LeaderboardsPage() {
       .join(" ")
   }
 
-  // Generate mock teams for testing
-  const generateMockTeams = (count: number): Team[] => {
-    const mockTeams: Team[] = []
-    const teamNames = [
-      "Betting on Betts",
-      "Home Run Heroes",
-      "Diamond Kings",
-      "Power Hitters",
-      "Grand Slammers",
-      "Bronx Bombers",
-      "Slugger Squad",
-      "Fence Busters",
-      "Dinger Dynasty",
-      "Yard Work",
-      "Long Ball Legends",
-      "Out of the Park",
-      "Blast Masters",
-      "Homer Homies",
-      "Swing Kings",
-      "Bat Crushers",
-      "Ball Bashers",
-      "Moonshot Maniacs",
-      "Clutch Crushers",
-      "Deep Threat",
-    ]
-
-    const userEmails = [
-      "john.doe@example.com",
-      "jane.smith@example.com",
-      "mike.jones@example.com",
-      "sarah.wilson@example.com",
-      "david.brown@example.com",
-      "current.user@example.com",
-    ]
-
-    for (let i = 0; i < count; i++) {
-      const isUserTeam = i < 3 // Make the first 3 teams belong to the current user
-      const actualHR = Math.floor(Math.random() * 50) + 30
-
-      mockTeams.push({
-        id: `mock-team-${i}`,
-        teamName:
-          teamNames[i % teamNames.length] + (i >= teamNames.length ? ` ${Math.floor(i / teamNames.length) + 1}` : ""),
-        userId: isUserTeam ? "current-user-id" : `user-${i}`,
-        userEmail: isUserTeam ? "current.user@example.com" : userEmails[i % (userEmails.length - 1)],
-        isPaid: Math.random() > 0.2, // 80% chance of being paid
-        createdAt: { toDate: () => new Date(Date.now() - i * 86400000) },
-        totalHR: 150 - i * 2,
-        actualHR: actualHR,
-        rank: i + 1,
-        players: {
-          tier1Player: { id: "t1p1", name: "Aaron Judge", team: "NYY", hr2024: 54, position: "RF" },
-          tier2Player: { id: "t2p1", name: "Mike Trout", team: "LAA", hr2024: 40, position: "CF" },
-          tier3Player: { id: "t3p1", name: "Rafael Devers", team: "BOS", hr2024: 34, position: "3B" },
-          wildcard1: { id: "wp1", name: "Ronald Acuña Jr.", team: "ATL", hr2024: 15, position: "RF" },
-          wildcard2: { id: "wp2", name: "Fernando Tatis Jr.", team: "SD", hr2024: 25, position: "RF" },
-          wildcard3: { id: "wp3", name: "Julio Rodríguez", team: "SEA", hr2024: 22, position: "CF" },
-        },
-      })
-    }
-
-    // Set current user ID for mock data
-    setCurrentUserId("current-user-id")
-
-    // Set user teams
-    setUserTeams(mockTeams.filter((team) => team.userId === "current-user-id"))
-
-    return mockTeams
-  }
-
   if (isLoading && teams.length === 0) {
     return (
       <div className="max-w-[1200px] mx-auto px-4 py-8 md:px-8 flex flex-col items-center justify-center min-h-[50vh]">
@@ -257,8 +273,22 @@ export default function LeaderboardsPage() {
     <div className="max-w-[1200px] mx-auto px-4 py-8 md:px-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-4xl font-bold mb-2">Leaderboards</h1>
-          <p className="text-muted-foreground">Track all teams in the Homerun Fantasy league</p>
+          <div className="flex items-center">
+            <BeerIcon className="h-8 w-8 text-primary mr-2" />
+            <h1 className="text-4xl font-bold">Leaderboards</h1>
+          </div>
+          <div className="flex flex-col mt-2">
+            <p className="text-muted-foreground">Track all teams in the Homerun Fantasy league</p>
+            {lastUpdated && (
+              <div className="flex items-center mt-1 text-sm text-muted-foreground">
+                <p>Stats last updated: {lastUpdated}</p>
+                <div className="ml-2 flex items-center">
+                  <span className="inline-block w-2 h-2 rounded-full mr-1 bg-green-500"></span>
+                  <span>Auto-updating</span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <Button asChild variant="outline">
           <Link href="/dashboard">
@@ -292,7 +322,7 @@ export default function LeaderboardsPage() {
                   <tr className="border-b">
                     <th className="text-left py-3 px-4 font-medium">Rank</th>
                     <th className="text-left py-3 px-4 font-medium">Team</th>
-                    <th className="text-right py-3 px-4 font-medium">Home Runs</th>
+                    <th className="text-right py-3 px-4 font-medium">{currentSeasonYear} HRs</th>
                     <th className="text-center py-3 px-4 font-medium w-10">Details</th>
                   </tr>
                 </thead>
@@ -323,7 +353,7 @@ export default function LeaderboardsPage() {
                           </Badge>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-right font-medium">{team.actualHR || 0}</td>
+                      <td className="py-3 px-4 text-right font-medium">{calculateTeamHomeRuns(team)}</td>
                       <td className="py-3 px-4 text-center">
                         <TooltipProvider>
                           <Tooltip>
@@ -343,27 +373,27 @@ export default function LeaderboardsPage() {
                                 <div className="space-y-1.5 mt-3">
                                   <div className="flex justify-between text-sm">
                                     <span>{team.players.tier1Player?.name} (T1)</span>
-                                    <span className="font-medium">{Math.floor(Math.random() * 15) + 1} HR</span>
+                                    <span className="font-medium">{team.playerHRs?.[0] || 0} HR</span>
                                   </div>
                                   <div className="flex justify-between text-sm">
                                     <span>{team.players.tier2Player?.name} (T2)</span>
-                                    <span className="font-medium">{Math.floor(Math.random() * 10) + 1} HR</span>
+                                    <span className="font-medium">{team.playerHRs?.[1] || 0} HR</span>
                                   </div>
                                   <div className="flex justify-between text-sm">
                                     <span>{team.players.tier3Player?.name} (T3)</span>
-                                    <span className="font-medium">{Math.floor(Math.random() * 8) + 1} HR</span>
+                                    <span className="font-medium">{team.playerHRs?.[2] || 0} HR</span>
                                   </div>
                                   <div className="flex justify-between text-sm">
                                     <span>{team.players.wildcard1?.name} (WC)</span>
-                                    <span className="font-medium">{Math.floor(Math.random() * 6) + 1} HR</span>
+                                    <span className="font-medium">{team.playerHRs?.[3] || 0} HR</span>
                                   </div>
                                   <div className="flex justify-between text-sm">
                                     <span>{team.players.wildcard2?.name} (WC)</span>
-                                    <span className="font-medium">{Math.floor(Math.random() * 5) + 1} HR</span>
+                                    <span className="font-medium">{team.playerHRs?.[4] || 0} HR</span>
                                   </div>
                                   <div className="flex justify-between text-sm">
                                     <span>{team.players.wildcard3?.name} (WC)</span>
-                                    <span className="font-medium">{Math.floor(Math.random() * 4) + 1} HR</span>
+                                    <span className="font-medium">{team.playerHRs?.[5] || 0} HR</span>
                                   </div>
                                 </div>
                               </div>
@@ -386,7 +416,7 @@ export default function LeaderboardsPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>HR Team Leaderboard</CardTitle>
-              <CardDescription>Teams ranked by home runs for the {upcomingSeasonYear} season</CardDescription>
+              <CardDescription>Teams ranked by home runs for the {currentSeasonYear} season</CardDescription>
             </div>
             <Badge variant="outline" className="ml-2">
               <Users className="h-3.5 w-3.5 mr-1" />
@@ -400,7 +430,7 @@ export default function LeaderboardsPage() {
               <Trophy className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-xl font-medium mb-2">No Teams Found</h3>
               <p className="text-muted-foreground">
-                No teams have been registered yet for the {upcomingSeasonYear} season
+                No teams have been registered yet for the {currentSeasonYear} season
               </p>
             </div>
           ) : (
@@ -412,8 +442,8 @@ export default function LeaderboardsPage() {
                       <th className="text-left py-3 px-4 font-medium">Rank</th>
                       <th className="text-left py-3 px-4 font-medium">Team</th>
                       <th className="text-left py-3 px-4 font-medium">Owner</th>
-                      <th className="text-right py-3 px-4 font-medium">Home Runs</th>
-                      <th className="text-center py-3 px-4 font-medium w-10">Details</th>
+                      <th className="text-right py-3 px-4 font-medium">{currentSeasonYear} HRs</th>
+                      <th className="text-center py-3 px-4 font-medium">Details</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -452,7 +482,7 @@ export default function LeaderboardsPage() {
                             )}
                           </td>
                           <td className="py-3 px-4 text-muted-foreground">{formatOwnerName(team.userEmail)}</td>
-                          <td className="py-3 px-4 text-right font-medium">{team.actualHR || 0}</td>
+                          <td className="py-3 px-4 text-right font-medium">{calculateTeamHomeRuns(team)}</td>
                           <td className="py-3 px-4 text-center">
                             <TooltipProvider>
                               <Tooltip>
@@ -472,27 +502,27 @@ export default function LeaderboardsPage() {
                                     <div className="space-y-1.5 mt-3">
                                       <div className="flex justify-between text-sm">
                                         <span>{team.players.tier1Player?.name} (T1)</span>
-                                        <span className="font-medium">{Math.floor(Math.random() * 15) + 1} HR</span>
+                                        <span className="font-medium">{team.playerHRs?.[0] || 0} HR</span>
                                       </div>
                                       <div className="flex justify-between text-sm">
                                         <span>{team.players.tier2Player?.name} (T2)</span>
-                                        <span className="font-medium">{Math.floor(Math.random() * 10) + 1} HR</span>
+                                        <span className="font-medium">{team.playerHRs?.[1] || 0} HR</span>
                                       </div>
                                       <div className="flex justify-between text-sm">
                                         <span>{team.players.tier3Player?.name} (T3)</span>
-                                        <span className="font-medium">{Math.floor(Math.random() * 8) + 1} HR</span>
+                                        <span className="font-medium">{team.playerHRs?.[2] || 0} HR</span>
                                       </div>
                                       <div className="flex justify-between text-sm">
                                         <span>{team.players.wildcard1?.name} (WC)</span>
-                                        <span className="font-medium">{Math.floor(Math.random() * 6) + 1} HR</span>
+                                        <span className="font-medium">{team.playerHRs?.[3] || 0} HR</span>
                                       </div>
                                       <div className="flex justify-between text-sm">
                                         <span>{team.players.wildcard2?.name} (WC)</span>
-                                        <span className="font-medium">{Math.floor(Math.random() * 5) + 1} HR</span>
+                                        <span className="font-medium">{team.playerHRs?.[4] || 0} HR</span>
                                       </div>
                                       <div className="flex justify-between text-sm">
                                         <span>{team.players.wildcard3?.name} (WC)</span>
-                                        <span className="font-medium">{Math.floor(Math.random() * 4) + 1} HR</span>
+                                        <span className="font-medium">{team.playerHRs?.[5] || 0} HR</span>
                                       </div>
                                     </div>
                                   </div>
@@ -536,4 +566,3 @@ export default function LeaderboardsPage() {
     </div>
   )
 }
-

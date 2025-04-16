@@ -1,3 +1,8 @@
+/**
+ * Environment utility functions
+ */
+
+// Get the base URL for API calls
 export function getBaseUrl(): string {
   // Browser-side
   if (typeof window !== "undefined") {
@@ -28,4 +33,3 @@ export function ensureEnvironmentVariables() {
 
 // Call this function immediately
 ensureEnvironmentVariables()
-

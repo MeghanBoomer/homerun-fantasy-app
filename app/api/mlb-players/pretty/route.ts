@@ -88,7 +88,7 @@ export async function GET() {
         <div class="player-card">
           <div class="player-name">${player.name}</div>
           <div class="player-details">
-            ${player.team} • ${player.position || "POS"} • <span class="hr-count">${player.hr2024} HR</span>
+            ${player.team} • ${player.position || "POS"} • <span class="hr-count">${player.hr2025} HR</span>
           </div>
         </div>
       `,
@@ -108,7 +108,7 @@ export async function GET() {
         <div class="player-card">
           <div class="player-name">${player.name}</div>
           <div class="player-details">
-            ${player.team} • ${player.position || "POS"} • <span class="hr-count">${player.hr2024} HR</span>
+            ${player.team} • ${player.position || "POS"} • <span class="hr-count">${player.hr2025} HR</span>
           </div>
         </div>
       `,
@@ -128,7 +128,7 @@ export async function GET() {
         <div class="player-card">
           <div class="player-name">${player.name}</div>
           <div class="player-details">
-            ${player.team} • ${player.position || "POS"} • <span class="hr-count">${player.hr2024} HR</span>
+            ${player.team} • ${player.position || "POS"} • <span class="hr-count">${player.hr2025} HR</span>
           </div>
         </div>
       `,
@@ -148,7 +148,7 @@ export async function GET() {
         <div class="player-card">
           <div class="player-name">${player.name}</div>
           <div class="player-details">
-            ${player.team} • ${player.position || "POS"} • <span class="hr-count">${player.hr2024} HR</span>
+            ${player.team} • ${player.position || "POS"} • <span class="hr-count">${player.hr2025} HR</span>
           </div>
         </div>
       `,
@@ -167,4 +167,3 @@ export async function GET() {
     },
   )
 }
-

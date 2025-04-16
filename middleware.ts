@@ -3,13 +3,9 @@ import type { NextRequest } from "next/server"
 
 // This middleware runs before any request is processed
 export function middleware(request: NextRequest) {
-  // This is a hack to suppress the VERCEL_URL warning
-  // It adds the environment variable to the process.env object
-  if (!process.env.VERCEL_URL && typeof window === "undefined") {
-    // @ts-ignore - Intentionally modifying process.env
-    process.env.VERCEL_URL = request.headers.get("host") || "localhost:3000"
-  }
+  console.log("Middleware running for path:", request.nextUrl.pathname)
 
+  // Just pass through all requests without modification
   return NextResponse.next()
 }
 
@@ -20,4 +16,3 @@ export const config = {
     "/(.*)",
   ],
 }
-

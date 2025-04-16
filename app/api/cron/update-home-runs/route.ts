@@ -1,48 +1,60 @@
 import { NextResponse } from "next/server"
-import { getBaseUrl } from "../../../../lib/get-base-url"
+import { adminDb } from "../../../../lib/firebase-admin"
+import { createLogger } from "../../../../lib/logger"
+import { mlbApi } from "../../../../lib/mlb-api-service"
 
-// This route will be called by a scheduled job (cron)
+const logger = createLogger("cron-update-home-runs")
+
+// This endpoint will be called by a scheduled job (every few hours)
 export async function GET(request: Request) {
   try {
-    // Check for a secret token to prevent unauthorized access
-    const { searchParams } = new URL(request.url)
-    const token = searchParams.get("token")
+    logger.info("Scheduled home run data update triggered")
 
-    // In production, you should use a secure token stored in environment variables
-    // For now, we'll use a simple token for demonstration
-    const validToken = "your-secret-token"
-
-    if (token !== validToken) {
+    // Verify the request is from Vercel Cron
+    const authHeader = request.headers.get("authorization")
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      logger.warn("Unauthorized cron job attempt", { authHeader })
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("Cron job triggered: Updating home run data")
+    // Get all player IDs from the database
+    const teamsSnapshot = await adminDb.collection("teams").get()
+    const allPlayerIds = new Set<string>()
 
-    // Call our update-home-runs API
-    const baseUrl = getBaseUrl()
-
-    const response = await fetch(`${baseUrl}/api/update-home-runs`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+    teamsSnapshot.forEach((doc) => {
+      const team = doc.data()
+      if (team.players) {
+        // Add all player IDs from the team
+        if (team.players.tier1Player?.id) allPlayerIds.add(team.players.tier1Player.id)
+        if (team.players.tier2Player?.id) allPlayerIds.add(team.players.tier2Player.id)
+        if (team.players.tier3Player?.id) allPlayerIds.add(team.players.tier3Player.id)
+        if (team.players.wildcard1?.id) allPlayerIds.add(team.players.wildcard1.id)
+        if (team.players.wildcard2?.id) allPlayerIds.add(team.players.wildcard2.id)
+        if (team.players.wildcard3?.id) allPlayerIds.add(team.players.wildcard3.id)
+      }
     })
 
-    if (!response.ok) {
-      throw new Error(`Failed to update home runs: ${response.status} ${response.statusText}`)
-    }
+    logger.info(`Found ${allPlayerIds.size} unique players to check for home runs`)
 
-    const data = await response.json()
+    // Fetch recent home runs for all players
+    const homeRuns = await mlbApi.getRecentHomeRuns([...allPlayerIds], 7)
 
-    console.log("Home run data update completed successfully")
+    // Store the home runs in the database for quick access
+    await adminDb.collection("cached-data").doc("recent-home-runs").set({
+      homeRuns,
+      lastUpdated: new Date(),
+    })
+
+    logger.info(`Cached ${homeRuns.length} recent home runs`)
 
     return NextResponse.json({
       success: true,
-      message: "Home run data updated successfully",
-      details: data,
+      message: `Updated home run data for ${allPlayerIds.size} players`,
+      homeRunCount: homeRuns.length,
+      timestamp: new Date().toISOString(),
     })
-  } catch (error: any) {
-    console.error("Error in cron job:", error)
+  } catch (error) {
+    logger.error("Error in scheduled home run update:", error)
     return NextResponse.json(
       {
         error: error.message || "An unknown error occurred",
@@ -51,4 +63,3 @@ export async function GET(request: Request) {
     )
   }
 }
-

@@ -38,6 +38,9 @@ export default function ManualUpdatePage() {
   const [isSaving, setIsSaving] = useState(false)
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
 
+  // Explicitly set the season year to 2025
+  const seasonYear = 2025
+
   useEffect(() => {
     fetchTeams()
   }, [])
@@ -109,7 +112,7 @@ export default function ManualUpdatePage() {
     try {
       const totalHR = calculateTotal()
 
-      // Update the team document
+      // Update the team document with 2025 HR data
       await updateDoc(doc(db, "teams", selectedTeam.id), {
         actualHR: totalHR,
         playerHRs: playerHRs,
@@ -118,7 +121,7 @@ export default function ManualUpdatePage() {
 
       setResult({
         success: true,
-        message: `Successfully updated ${selectedTeam.teamName} with ${totalHR} total home runs`,
+        message: `Successfully updated ${selectedTeam.teamName} with ${totalHR} total home runs for the ${seasonYear} season`,
       })
 
       // Refresh team details
@@ -138,7 +141,7 @@ export default function ManualUpdatePage() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-4xl font-bold mb-2">Manual Stats Update</h1>
-          <p className="text-muted-foreground">Manually update home run counts for individual teams</p>
+          <p className="text-muted-foreground">Manually update {seasonYear} home run counts for individual teams</p>
         </div>
         <Button asChild variant="outline">
           <Link href="/admin">
@@ -151,7 +154,7 @@ export default function ManualUpdatePage() {
       <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle>Update Team Home Run Counts</CardTitle>
-          <CardDescription>Enter the actual 2025 home run counts for each player</CardDescription>
+          <CardDescription>Enter the actual {seasonYear} home run counts for each player</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
@@ -239,7 +242,7 @@ export default function ManualUpdatePage() {
 
                   <div className="pt-4 border-t mt-4">
                     <div className="flex justify-between items-center">
-                      <span className="font-medium">Total Home Runs:</span>
+                      <span className="font-medium">{seasonYear} Total Home Runs:</span>
                       <span className="text-xl font-bold">{calculateTotal()}</span>
                     </div>
                   </div>
@@ -272,7 +275,7 @@ export default function ManualUpdatePage() {
               ) : (
                 <>
                   <Save className="mr-2 h-4 w-4" />
-                  Save HR Counts
+                  Save {seasonYear} HR Counts
                 </>
               )}
             </Button>
@@ -282,4 +285,3 @@ export default function ManualUpdatePage() {
     </div>
   )
 }
-

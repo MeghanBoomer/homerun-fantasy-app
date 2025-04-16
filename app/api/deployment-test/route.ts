@@ -7,4 +7,3 @@ export async function GET() {
     environment: process.env.VERCEL_URL || "unknown",
   })
 }
-

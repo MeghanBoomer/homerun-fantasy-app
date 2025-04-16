@@ -64,4 +64,3 @@ async function checkAdminStatus(uid: string) {
     return false
   }
 }
-

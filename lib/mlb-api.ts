@@ -89,8 +89,8 @@ export async function fetchMlbData(endpoint: string, cacheName: string, cacheHou
   }
 }
 
-// Get home run leaders
-export async function getHomeRunLeaders(season: number = new Date().getFullYear(), limit = 100) {
+// Get home run leaders - explicitly for 2025 season
+export async function getHomeRunLeaders(season = 2025, limit = 100) {
   const { data, lastUpdated, isCached } = await fetchMlbData(
     `stats/leaders?leaderCategories=homeRuns&season=${season}&limit=${limit}&sportId=1`,
     "hr-leaders",
@@ -104,7 +104,7 @@ export async function getHomeRunLeaders(season: number = new Date().getFullYear(
       id: `p${leader.person.id}`,
       name: leader.person.fullName,
       team: leader.team?.abbreviation || leader.team?.name || "Unknown",
-      hr2025: leader.value,
+      hr2025: leader.value, // Explicitly use hr2025 for the 2025 season
       position: leader.position?.abbreviation || "Unknown",
     }))
   }
@@ -124,6 +124,7 @@ export async function getPlayerDetails(playerId: string) {
   const { data, lastUpdated, isCached } = await fetchMlbData(
     `people/${mlbPlayerId}?hydrate=stats(group=[hitting],type=[yearByYear])`,
     `player-${mlbPlayerId}`,
+    24, // Cache player data for 24 hours
   )
 
   return {
@@ -132,4 +133,3 @@ export async function getPlayerDetails(playerId: string) {
     isCached,
   }
 }
-

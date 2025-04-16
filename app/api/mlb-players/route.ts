@@ -1,231 +1,132 @@
 import { NextResponse } from "next/server"
 
-// MLB Stats API base URL
-const MLB_API_BASE_URL = "https://statsapi.mlb.com/api/v1"
-
-// Cache duration in seconds (1 hour)
-const CACHE_DURATION = 3600
-
-// Module-level cache variables
-let cachedMLBData: any = null
-let cachedMLBDataTimestamp: number | null = null
-
-// Function to fetch with timeout
-async function fetchWithTimeout(url: string, options = {}, timeout = 10000) {
-  const controller = new AbortController()
-  const { signal } = controller
-
-  const timeoutId = setTimeout(() => controller.abort(), timeout)
-
+export async function GET() {
   try {
-    const response = await fetch(url, { ...options, signal })
-    clearTimeout(timeoutId)
-    return response
-  } catch (error) {
-    clearTimeout(timeoutId)
-    throw error
-  }
-}
+    console.log("Fetching MLB player data from MLB Stats API")
 
-// Function to fetch players from MLB API
-async function fetchMLBPlayers() {
-  try {
-    // Current season - adjust as needed
-    const currentYear = new Date().getFullYear()
+    // Current year - explicitly set to 2025 for the current season
+    const currentYear = 2025 // Explicitly set to 2025 for the current season
 
-    console.log(`Fetching MLB data for ${currentYear} season...`)
+    // Step 1: Fetch active players for 2025 season first
+    const activePlayersUrl = `https://statsapi.mlb.com/api/v1/sports/1/players?season=${currentYear}`
+    console.log(`Fetching active players for ${currentYear} from: ${activePlayersUrl}`)
 
-    // Fetch home run leaders for the current season
-    // We'll request the top 100 HR leaders to have enough data for our tiers
-    const response = await fetchWithTimeout(
-      `${MLB_API_BASE_URL}/stats/leaders?leaderCategories=homeRuns&season=${currentYear}&limit=100&sportId=1`,
-      {},
-      15000, // 15 second timeout
-    )
+    let activePlayerIds = new Set<string>()
+    let activePlayersData: any[] = []
 
-    if (!response.ok) {
-      throw new Error(`MLB API responded with status: ${response.status}`)
-    }
+    try {
+      const activePlayersResponse = await fetch(activePlayersUrl, {
+        headers: {
+          "User-Agent": "Homerun-Fantasy-App/1.0",
+          Accept: "application/json",
+        },
+        next: { revalidate: 0 }, // Don't cache
+      })
 
-    const data = await response.json()
-    console.log("MLB API response received successfully")
+      if (activePlayersResponse.ok) {
+        const data = await activePlayersResponse.json()
 
-    return processMLBData(data)
-  } catch (error) {
-    console.error("Error fetching from MLB API:", error)
-    throw error
-  }
-}
-
-// Process MLB API data into our format
-function processMLBData(mlbData: any) {
-  try {
-    // Check if the data has the expected structure
-    if (
-      !mlbData ||
-      !mlbData.leagueLeaders ||
-      !Array.isArray(mlbData.leagueLeaders) ||
-      mlbData.leagueLeaders.length === 0
-    ) {
-      console.error("MLB API returned unexpected data structure:", mlbData)
-      return getFallbackData()
-    }
-
-    // Find the home runs leaderboard
-    const homeRunLeaders = mlbData.leagueLeaders.find((leaderboard: any) => leaderboard.leaderCategory === "homeRuns")
-
-    if (!homeRunLeaders || !homeRunLeaders.leaders || !Array.isArray(homeRunLeaders.leaders)) {
-      console.error("Could not find home run leaders in the MLB API response")
-      return getFallbackData()
-    }
-
-    // Map the leaders to our player format
-    const allPlayers = homeRunLeaders.leaders
-      .map((leader: any) => {
-        // Add validation to handle potential missing properties
-        if (!leader.person || !leader.team) {
-          return null
+        if (data.people && Array.isArray(data.people)) {
+          activePlayersData = data.people
+          // Create a set of active player IDs for quick lookup
+          activePlayerIds = new Set(data.people.map((player) => player.id.toString()))
+          console.log(`Found ${activePlayerIds.size} active players for ${currentYear}`)
         }
+      } else {
+        console.error(`Failed to fetch active players: ${activePlayersResponse.status}`)
+      }
+    } catch (error) {
+      console.error("Error fetching active players:", error)
+    }
+
+    // Step 2: Fetch 2025 HR leaders
+    const hrLeadersUrl = `https://statsapi.mlb.com/api/v1/stats/leaders?leaderCategories=homeRuns&season=${currentYear}&limit=500&sportId=1`
+    console.log(`Fetching ${currentYear} HR leaders from: ${hrLeadersUrl}`)
+
+    let hrLeaders: any[] = []
+
+    try {
+      const hrLeadersResponse = await fetch(hrLeadersUrl, {
+        headers: {
+          "User-Agent": "Homerun-Fantasy-App/1.0",
+          Accept: "application/json",
+        },
+        next: { revalidate: 0 }, // Don't cache
+      })
+
+      if (hrLeadersResponse.ok) {
+        const data = await hrLeadersResponse.json()
+
+        if (data.leagueLeaders && data.leagueLeaders.length > 0 && data.leagueLeaders[0].leaders) {
+          // Get HR leaders for the current year (2025)
+          hrLeaders = data.leagueLeaders[0].leaders.map((leader) => ({
+            id: `p${leader.person.id}`,
+            name: leader.person.fullName,
+            team: leader.team?.abbreviation || leader.team?.name || "Unknown",
+            hr2025: leader.value, // This is 2025 data
+            position: leader.position?.abbreviation || "Unknown",
+          }))
+
+          console.log(`Found ${hrLeaders.length} HR leaders from ${currentYear}`)
+        }
+      } else {
+        console.error(`Failed to fetch HR leaders: ${hrLeadersResponse.status}`)
+        throw new Error(`Failed to fetch HR leaders: ${hrLeadersResponse.status}`)
+      }
+    } catch (error) {
+      console.error("Error fetching HR leaders:", error)
+      throw error // Rethrow to stop execution - no fallback to mock data
+    }
+
+    // Step 3: Process active players for wildcard selections
+    let wildcardPlayers: any[] = []
+
+    if (activePlayersData.length > 0) {
+      wildcardPlayers = activePlayersData.map((player) => {
+        // Try to find this player in the HR leaders to get their 2025 HR count
+        const hrLeader = hrLeaders.find((leader) => leader.id === `p${player.id}`)
 
         return {
-          id: `p${leader.person.id || Math.random().toString(36).substring(2, 10)}`,
-          name: leader.person.fullName || `${leader.person.firstName || ""} ${leader.person.lastName || ""}`,
-          team: leader.team.abbreviation || leader.team.name?.substring(0, 3) || "MLB",
-          hr2024: Number.parseInt(leader.value) || 0,
-          position: (leader.position && leader.position.abbreviation) || "POS",
+          id: `p${player.id}`,
+          name: player.fullName,
+          team: player.currentTeam?.abbreviation || "Unknown",
+          hr2025: hrLeader ? hrLeader.hr2025 : 0, // Use 2025 HR count if available, otherwise 0
+          position: player.primaryPosition?.abbreviation || "Unknown",
         }
       })
-      .filter(Boolean) // Remove any null entries
 
-    // If we don't have enough players, return fallback data
-    if (allPlayers.length < 20) {
-      console.warn("MLB API returned insufficient player data, using fallback data")
-      return getFallbackData()
+      console.log(`Processed ${wildcardPlayers.length} active players for wildcard selections`)
     }
 
-    // Sort by home runs (should already be sorted, but just to be safe)
-    allPlayers.sort((a: any, b: any) => b.hr2024 - a.hr2024)
+    // Divide HR leaders into tiers
+    const sortedHrLeaders = [...hrLeaders].sort((a, b) => b.hr2025 - a.hr2025)
 
-    // Divide into tiers based on HR counts
-    // Tier 1: Top ~10% of HR hitters (at least 6)
-    // Tier 2: Next ~15% of HR hitters (at least 6)
-    // Tier 3: Next ~25% of HR hitters (at least 6)
-    // Wildcards: Everyone else
-    const tier1Count = Math.max(6, Math.floor(allPlayers.length * 0.1))
-    const tier2Count = Math.max(6, Math.floor(allPlayers.length * 0.15))
-    const tier3Count = Math.max(6, Math.floor(allPlayers.length * 0.25))
+    const tier1Count = Math.min(6, Math.ceil(sortedHrLeaders.length * 0.1)) // Top 10%
+    const tier2Count = Math.min(6, Math.ceil(sortedHrLeaders.length * 0.15)) // Next 15%
+    const tier3Count = Math.min(6, Math.ceil(sortedHrLeaders.length * 0.2)) // Next 20%
 
-    const tier1Players = allPlayers.slice(0, tier1Count)
-    const tier2Players = allPlayers.slice(tier1Count, tier1Count + tier2Count)
-    const tier3Players = allPlayers.slice(tier1Count + tier2Count, tier1Count + tier2Count + tier3Count)
-    const wildcardPlayers = allPlayers.slice(tier1Count + tier2Count + tier3Count)
+    const tier1Players = sortedHrLeaders.slice(0, tier1Count)
+    const tier2Players = sortedHrLeaders.slice(tier1Count, tier1Count + tier2Count)
+    const tier3Players = sortedHrLeaders.slice(tier1Count + tier2Count, tier1Count + tier2Count + tier3Count)
 
-    // Add Kike Hernandez to wildcards if not already present
-    const kikeHernandez = wildcardPlayers.find(
-      (p) => p.name.toLowerCase().includes("kike") || p.name.toLowerCase().includes("enrique hernandez"),
-    )
+    // Make sure wildcardPlayers doesn't include players already in tiers
+    const tierPlayerIds = [...tier1Players, ...tier2Players, ...tier3Players].map((p) => p.id)
+    const filteredWildcardPlayers = wildcardPlayers.filter((p) => !tierPlayerIds.includes(p.id))
 
-    if (!kikeHernandez) {
-      wildcardPlayers.push({
-        id: "wp91",
-        name: "Enrique (Kike) Hernandez",
-        team: "LAD",
-        hr2024: 18,
-        position: "2B/OF",
-      })
-    }
+    // Combine all players for the allPlayers array
+    const allPlayers = [...tier1Players, ...tier2Players, ...tier3Players, ...filteredWildcardPlayers]
 
-    return {
+    return NextResponse.json({
       tier1Players,
       tier2Players,
       tier3Players,
-      wildcardPlayers,
-      allPlayers: [...tier1Players, ...tier2Players, ...tier3Players, ...wildcardPlayers],
+      wildcardPlayers: filteredWildcardPlayers,
+      allPlayers,
       lastUpdated: new Date().toISOString(),
-      source: "MLB API",
-    }
+      source: `MLB API (${currentYear} Season Data)`,
+    })
   } catch (error) {
-    console.error("Error processing MLB data:", error)
-    return getFallbackData()
+    console.error("Error in MLB players API:", error)
+    throw error // Rethrow the error - no fallback to mock data
   }
 }
-
-// Fallback data in case the API fails
-function getFallbackData() {
-  // Using your existing fallback data
-  const FALLBACK_PLAYERS = {
-    tier1Players: [
-      { id: "t1p1", name: "Aaron Judge", team: "NYY", hr2024: 54, position: "RF" },
-      { id: "t1p2", name: "Shohei Ohtani", team: "LAD", hr2024: 49, position: "DH" },
-      { id: "t1p3", name: "Pete Alonso", team: "NYM", hr2024: 46, position: "1B" },
-      { id: "t1p4", name: "Kyle Schwarber", team: "PHI", hr2024: 45, position: "LF" },
-      { id: "t1p5", name: "Matt Olson", team: "ATL", hr2024: 43, position: "1B" },
-      { id: "t1p6", name: "Yordan Alvarez", team: "HOU", hr2024: 42, position: "DH" },
-    ],
-    tier2Players: [
-      { id: "t2p1", name: "Mike Trout", team: "LAA", hr2024: 40, position: "CF" },
-      { id: "t2p2", name: "Vladimir Guerrero Jr.", team: "TOR", hr2024: 39, position: "1B" },
-      { id: "t2p3", name: "Juan Soto", team: "NYY", hr2024: 38, position: "RF" },
-      { id: "t2p4", name: "Adolis García", team: "TEX", hr2024: 37, position: "RF" },
-      { id: "t2p5", name: "Mookie Betts", team: "LAD", hr2024: 36, position: "RF" },
-      { id: "t2p6", name: "Bryce Harper", team: "PHI", hr2024: 35, position: "1B" },
-    ],
-    tier3Players: [
-      { id: "t3p1", name: "Rafael Devers", team: "BOS", hr2024: 34, position: "3B" },
-      { id: "t3p2", name: "Teoscar Hernández", team: "LAD", hr2024: 33, position: "RF" },
-      { id: "t3p3", name: "Giancarlo Stanton", team: "NYY", hr2024: 32, position: "DH" },
-      { id: "t3p4", name: "Bobby Witt Jr.", team: "KC", hr2024: 31, position: "SS" },
-      { id: "t3p5", name: "Marcell Ozuna", team: "ATL", hr2024: 30, position: "DH" },
-      { id: "t3p6", name: "Gunnar Henderson", team: "BAL", hr2024: 29, position: "SS" },
-    ],
-    wildcardPlayers: [
-      { id: "wp1", name: "Ronald Acuña Jr.", team: "ATL", hr2024: 15, position: "RF" },
-      { id: "wp2", name: "Fernando Tatis Jr.", team: "SD", hr2024: 25, position: "RF" },
-      // Include all your existing wildcard players...
-      { id: "wp91", name: "Enrique (Kike) Hernandez", team: "LAD", hr2024: 18, position: "2B/OF" },
-    ],
-    lastUpdated: new Date().toISOString(),
-    source: "Fallback Data",
-  }
-
-  // Populate the allPlayers array in the fallback data
-  FALLBACK_PLAYERS.allPlayers = [
-    ...FALLBACK_PLAYERS.tier1Players,
-    ...FALLBACK_PLAYERS.tier2Players,
-    ...FALLBACK_PLAYERS.tier3Players,
-    ...FALLBACK_PLAYERS.wildcardPlayers,
-  ]
-
-  return FALLBACK_PLAYERS
-}
-
-export async function GET() {
-  try {
-    // Check if we have valid cached data
-    if (cachedMLBData && cachedMLBDataTimestamp) {
-      const cacheAge = Date.now() - cachedMLBDataTimestamp
-      if (cacheAge < CACHE_DURATION * 1000) {
-        console.log("Returning cached MLB data (age: " + Math.floor(cacheAge / 1000) + " seconds)")
-        return NextResponse.json(cachedMLBData)
-      }
-    }
-
-    // Fetch fresh data from MLB API
-    console.log("Fetching fresh MLB data")
-    const data = await fetchMLBPlayers()
-
-    // Cache the data
-    cachedMLBData = data
-    cachedMLBDataTimestamp = Date.now()
-
-    return NextResponse.json(data)
-  } catch (error) {
-    console.error("Error in MLB players API route:", error)
-
-    // Return fallback data if API fails
-    console.log("Returning fallback data due to error")
-    const fallbackData = getFallbackData()
-    return NextResponse.json(fallbackData)
-  }
-}
-

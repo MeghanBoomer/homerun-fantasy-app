@@ -163,4 +163,3 @@ export function SubmissionAnimation({ isOpen, teamName, onClose }: SubmissionAni
     </div>
   )
 }
-

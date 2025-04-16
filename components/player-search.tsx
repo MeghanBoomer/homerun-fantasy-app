@@ -9,7 +9,7 @@ interface Player {
   id: string
   name: string
   team: string
-  hr2024: number
+  hr2025: number // Using 2025 data
   position?: string
 }
 
@@ -47,18 +47,26 @@ export function PlayerSearch({
     }
   }, [searchTerm, players])
 
+  // In the highlightMatch function, make sure it handles special characters properly
   const highlightMatch = (text: string, query: string) => {
     if (!query || query.length <= 1) return text
 
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi")
+    // Escape special regex characters in the query
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    const regex = new RegExp(`(${escapedQuery})`, "gi")
     return text.replace(regex, "<mark>$1</mark>")
   }
 
+  // In the displayHR function, add a year parameter to clarify which season's HR count is being displayed
+  const displayHR = (value: number | undefined): string => {
+    return typeof value === "number" && !isNaN(value) ? value.toString() : "0"
+  }
+
   const handleSelect = (player: Player) => {
-    // Ensure hr2024 is a valid number
+    // Ensure hr2025 is a valid number
     const validatedPlayer = {
       ...player,
-      hr2024: typeof player.hr2024 === "number" && !isNaN(player.hr2024) ? player.hr2024 : 0,
+      hr2025: typeof player.hr2025 === "number" && !isNaN(player.hr2025) ? player.hr2025 : 0,
     }
 
     onSelect(validatedPlayer)
@@ -71,11 +79,6 @@ export function PlayerSearch({
     setSearchTerm("")
   }
 
-  // Helper function to safely display HR values
-  const displayHR = (value: number | undefined): string => {
-    return typeof value === "number" && !isNaN(value) ? value.toString() : "0"
-  }
-
   return (
     <div className="relative">
       {selectedPlayer && selectedPlayer.id ? (
@@ -83,7 +86,7 @@ export function PlayerSearch({
           <div>
             <p className="font-medium">{selectedPlayer.name}</p>
             <p className="text-sm text-muted-foreground">
-              {selectedPlayer.team} • {displayHR(selectedPlayer.hr2024)} HR in 2024
+              {selectedPlayer.team} • {displayHR(selectedPlayer.hr2025)} HR in 2025
               {selectedPlayer.position && ` • ${selectedPlayer.position}`}
             </p>
           </div>
@@ -115,10 +118,13 @@ export function PlayerSearch({
                       __html: highlightMatch(player.name, searchTerm),
                     }}
                   />
-                  <div className="text-sm text-muted-foreground">
-                    {player.team} • {displayHR(player.hr2024)} HR in 2024
-                    {player.position && ` • ${player.position}`}
-                  </div>
+                  {/* Update the player display to show the correct year for HR stats */}
+                  <div
+                    className="text-sm text-muted-foreground"
+                    dangerouslySetInnerHTML={{
+                      __html: `${player.team} • ${displayHR(player.hr2025)} HR in 2025${player.position ? ` • ${player.position}` : ""}`,
+                    }}
+                  />
                 </div>
               ))}
             </div>
@@ -134,4 +140,3 @@ export function PlayerSearch({
     </div>
   )
 }
-

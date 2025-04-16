@@ -1,58 +1,114 @@
 import { NextResponse } from "next/server"
-import { getBaseUrl } from "../../../../lib/get-base-url"
+import { adminDb } from "../../../../lib/firebase-admin"
+import { createLogger } from "../../../../lib/logger"
+
+const logger = createLogger("cron-auto-update-stats")
 
 // This endpoint will be called by a scheduled job (daily at 8am via Vercel Cron)
 export async function GET(request: Request) {
   try {
-    console.log("Daily stats update triggered")
+    logger.info("Daily stats update triggered")
 
-    // Get the base URL for API calls
-    const baseUrl = getBaseUrl()
+    // Verify the request is from Vercel Cron
+    const authHeader = request.headers.get("authorization")
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      logger.warn("Unauthorized cron job attempt", { authHeader })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-    // First, refresh the MLB data cache
-    console.log("Refreshing MLB data cache...")
-    const mlbResponse = await fetch(`${baseUrl}/api/mlb-current-stats`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-      },
-      cache: "no-store",
-    })
+    // First, fetch MLB data - explicitly for 2025 season
+    const currentYear = 2025 // Explicitly set to 2025
+    const mlbResponse = await fetch(
+      `https://statsapi.mlb.com/api/v1/stats/leaders?leaderCategories=homeRuns&season=${currentYear}&limit=100&sportId=1`,
+    )
 
     if (!mlbResponse.ok) {
-      console.warn(`MLB data refresh returned status: ${mlbResponse.status}`)
-    } else {
-      const mlbData = await mlbResponse.json()
-      console.log(`MLB data refreshed successfully. Got ${mlbData.players?.length || 0} players.`)
+      throw new Error(`MLB API responded with status: ${mlbResponse.status}`)
     }
 
-    // Then update team stats
-    console.log("Updating team stats...")
-    const response = await fetch(`${baseUrl}/api/update-team-stats`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+    const mlbData = await mlbResponse.json()
+    logger.info("MLB data fetched successfully")
+
+    // Process MLB data
+    const players = mlbData.leagueLeaders[0].leaders.map((leader) => ({
+      id: `p${leader.person.id}`,
+      name: leader.person.fullName,
+      team: leader.team?.abbreviation || leader.team?.name || "Unknown",
+      hr2025: leader.value, // Explicitly use hr2025 for the 2025 season
+      position: leader.position?.abbreviation || "Unknown",
+    }))
+
+    // Store in cache
+    await adminDb.collection("mlb-cache").doc("latest").set({
+      players,
+      fetchedAt: new Date(),
+      source: "MLB Stats API (Cron Job)",
+    })
+    logger.info("MLB data cached successfully")
+
+    // Fetch all teams
+    const teamsSnapshot = await adminDb.collection("teams").get()
+    const teams = []
+    const updates = []
+
+    logger.info(`Found ${teamsSnapshot.size} teams to update`)
+
+    // Update each team's stats
+    teamsSnapshot.forEach((doc) => {
+      const team = doc.data()
+      const teamPlayers = [
+        team.players.tier1Player,
+        team.players.tier2Player,
+        team.players.tier3Player,
+        team.players.wildcard1,
+        team.players.wildcard2,
+        team.players.wildcard3,
+      ]
+
+      // Calculate total HRs
+      let totalHR = 0
+      const playerHRs = []
+
+      teamPlayers.forEach((player) => {
+        if (player && player.id) {
+          const playerStats = players.find((p) => p.id === player.id)
+          const hr = playerStats ? playerStats.hr2025 : 0 // Use hr2025 for the 2025 season
+          totalHR += hr
+          playerHRs.push(hr)
+        } else {
+          playerHRs.push(0)
+        }
+      })
+
+      // Update the team document
+      updates.push(
+        adminDb.collection("teams").doc(doc.id).update({
+          actualHR: totalHR,
+          playerHRs: playerHRs,
+          lastUpdated: new Date(),
+        }),
+      )
+
+      teams.push({
+        id: doc.id,
+        name: team.teamName,
+        previousHR: team.actualHR || 0,
+        newHR: totalHR,
+      })
     })
 
-    if (!response.ok) {
-      throw new Error(`Failed to update stats: ${response.status} ${response.statusText}`)
-    }
-
-    const data = await response.json()
-
-    console.log("Daily stats update completed successfully")
+    // Wait for all updates to complete
+    await Promise.all(updates)
+    logger.info(`Updated ${teams.length} teams successfully`)
 
     return NextResponse.json({
       success: true,
-      message: "Stats automatically updated successfully",
-      details: data,
+      message: `Updated stats for ${teams.length} teams`,
+      teams,
       timestamp: new Date().toISOString(),
-      schedule: "Daily at 8:00 AM UTC",
     })
-  } catch (error: any) {
-    console.error("Error in automated stats update:", error)
+  } catch (error) {
+    logger.error("Error in automated stats update:", error)
     return NextResponse.json(
       {
         error: error.message || "An unknown error occurred",
@@ -61,4 +117,3 @@ export async function GET(request: Request) {
     )
   }
 }
-

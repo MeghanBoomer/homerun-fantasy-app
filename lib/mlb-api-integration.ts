@@ -1,3 +1,11 @@
+/**
+ * MLB API Integration Options
+ *
+ * This file documents various options for integrating with MLB data sources.
+ * In a production environment, you would implement one of these approaches.
+ */
+
+// Option 1: MLB Stats API (statsapi.mlb.com)
 export async function fetchFromMlbStatsApi() {
   // This is the official MLB Stats API
   // Documentation: https://statsapi.mlb.com/docs/
@@ -88,4 +96,3 @@ export async function shouldFetchNewData() {
 
   return true // Default to fetching new data
 }
-

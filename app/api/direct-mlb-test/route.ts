@@ -5,23 +5,23 @@ export async function GET() {
     // This is the same data structure used in the mlb-players endpoint
     const MLB_DATA = {
       tier1Players: [
-        { id: "p592450", name: "Aaron Judge", team: "NYY", hr2024: 37, position: "RF" },
-        { id: "p660271", name: "Shohei Ohtani", team: "LAD", hr2024: 44, position: "DH" },
+        { id: "p592450", name: "Aaron Judge", team: "NYY", hr2025: 37, position: "RF" },
+        { id: "p660271", name: "Shohei Ohtani", team: "LAD", hr2025: 44, position: "DH" },
         // More players would be here
       ],
       tier2Players: [
-        { id: "p545361", name: "Mike Trout", team: "LAA", hr2024: 18, position: "CF" },
-        { id: "p665489", name: "Vladimir Guerrero Jr.", team: "TOR", hr2024: 26, position: "1B" },
+        { id: "p545361", name: "Mike Trout", team: "LAA", hr2025: 18, position: "CF" },
+        { id: "p665489", name: "Vladimir Guerrero Jr.", team: "TOR", hr2025: 26, position: "1B" },
         // More players would be here
       ],
       tier3Players: [
-        { id: "p646240", name: "Rafael Devers", team: "BOS", hr2024: 33, position: "3B" },
-        { id: "p606192", name: "Teoscar Hernández", team: "LAD", hr2024: 26, position: "RF" },
+        { id: "p646240", name: "Rafael Devers", team: "BOS", hr2025: 33, position: "3B" },
+        { id: "p606192", name: "Teoscar Hernández", team: "LAD", hr2025: 26, position: "RF" },
         // More players would be here
       ],
       wildcardPlayers: [
-        { id: "p665742", name: "Ronald Acuña Jr.", team: "ATL", hr2024: 41, position: "RF" },
-        { id: "p665487", name: "Fernando Tatis Jr.", team: "SD", hr2024: 25, position: "RF" },
+        { id: "p665742", name: "Ronald Acuña Jr.", team: "ATL", hr2025: 41, position: "RF" },
+        { id: "p665487", name: "Fernando Tatis Jr.", team: "SD", hr2025: 25, position: "RF" },
         // More players would be here
       ],
       lastUpdated: new Date().toISOString(),
@@ -51,4 +51,3 @@ export async function GET() {
     )
   }
 }
-

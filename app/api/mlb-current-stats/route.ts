@@ -1,20 +1,22 @@
 import { NextResponse } from "next/server"
-import { db } from "../../../lib/firebase"
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"
+import { adminDb } from "../../../lib/firebase-admin"
+import { createLogger } from "../../../lib/logger"
+
+const logger = createLogger("mlb-current-stats")
 
 // This endpoint provides current MLB stats for the application
 export async function GET() {
   try {
     // Check if we've already fetched data recently to implement rate limiting
-    const cacheDoc = await getDoc(doc(db, "mlb-cache", "latest"))
-    const cacheData = cacheDoc.exists() ? cacheDoc.data() : null
+    const cacheDoc = await adminDb.collection("mlb-cache").doc("latest").get()
+    const cacheData = cacheDoc.exists ? cacheDoc.data() : null
     const lastFetchTime = cacheData?.fetchedAt?.toDate() || new Date(0)
     const now = new Date()
 
     // If we've fetched within the last 12 hours, use cached data
     const twelveHoursMs = 12 * 60 * 60 * 1000
     if (cacheData && now.getTime() - lastFetchTime.getTime() < twelveHoursMs) {
-      console.log("Using cached MLB data to avoid rate limits")
+      logger.info("Using cached MLB data to avoid rate limits")
       return NextResponse.json({
         players: cacheData.players,
         lastUpdated: lastFetchTime.toISOString(),
@@ -23,108 +25,112 @@ export async function GET() {
       })
     }
 
-    console.log("Fetching fresh MLB data from API")
+    logger.info("Fetching fresh MLB data from API")
 
-    // Current season year
-    const currentYear = new Date().getFullYear()
+    // Fetch from MLB API - explicitly for 2025 season
+    const currentYear = 2025
+    const mlbApiUrl = `https://statsapi.mlb.com/api/v1/stats/leaders?leaderCategories=homeRuns&season=${currentYear}&limit=500&sportId=1`
 
-    // Fetch home run leaders from MLB Stats API
-    const response = await fetch(
-      `https://statsapi.mlb.com/api/v1/stats/leaders?leaderCategories=homeRuns&season=${currentYear}&limit=100&sportId=1`,
-      {
-        headers: {
-          "User-Agent": "Homerun-Fantasy-App/1.0",
-          Accept: "application/json",
-        },
-        next: { revalidate: 0 }, // Don't cache at the Next.js level
+    logger.info(`Fetching MLB data from: ${mlbApiUrl}`)
+
+    const mlbResponse = await fetch(mlbApiUrl, {
+      headers: {
+        "User-Agent": "Homerun-Fantasy-App/1.0",
+        Accept: "application/json",
       },
-    )
+      next: { revalidate: 0 }, // Don't cache
+    })
 
-    if (!response.ok) {
-      throw new Error(`MLB API responded with status: ${response.status}`)
+    if (!mlbResponse.ok) {
+      throw new Error(`MLB API responded with status: ${mlbResponse.status}`)
     }
 
-    const data = await response.json()
+    const mlbData = await mlbResponse.json()
+    logger.info("MLB API data fetched successfully")
 
-    // Extract and format the player data
+    // Process the MLB data
     let players = []
-
-    if (data.leagueLeaders && data.leagueLeaders.length > 0 && data.leagueLeaders[0].leaders) {
-      players = data.leagueLeaders[0].leaders.map((leader) => ({
+    if (mlbData.leagueLeaders && mlbData.leagueLeaders.length > 0 && mlbData.leagueLeaders[0].leaders) {
+      players = mlbData.leagueLeaders[0].leaders.map((leader) => ({
         id: `p${leader.person.id}`,
         name: leader.person.fullName,
         team: leader.team?.abbreviation || leader.team?.name || "Unknown",
-        hr2025: leader.value, // Using the current year's data
+        hr2025: leader.value, // Explicitly use hr2025 for the 2025 season
         position: leader.position?.abbreviation || "Unknown",
       }))
     } else {
-      console.warn("Unexpected MLB API response format:", JSON.stringify(data).substring(0, 200))
-      throw new Error("MLB API returned unexpected data format")
+      throw new Error("No player data found in MLB API response")
     }
 
     // Store this data in Firestore for caching
-    await setDoc(doc(db, "mlb-cache", "latest"), {
-      players,
-      fetchedAt: serverTimestamp(),
-      source: `MLB API (${currentYear} Season)`,
-    })
+    await adminDb
+      .collection("mlb-cache")
+      .doc("latest")
+      .set({
+        players,
+        fetchedAt: new Date(),
+        source: `MLB API (${currentYear} Season Data)`,
+      })
 
     return NextResponse.json({
       players,
       lastUpdated: now.toISOString(),
-      source: `MLB API (${currentYear} Season)`,
+      source: `MLB API (${currentYear} Season Data)`,
       isCached: false,
     })
   } catch (error) {
-    console.error("Error fetching MLB data:", error)
-
-    // Try to get cached data as fallback
-    try {
-      const cacheDoc = await getDoc(doc(db, "mlb-cache", "latest"))
-      if (cacheDoc.exists()) {
-        const cacheData = cacheDoc.data()
-        console.log("Falling back to cached data due to API error")
-        return NextResponse.json({
-          players: cacheData.players,
-          lastUpdated: cacheData.fetchedAt.toDate().toISOString(),
-          source: "MLB API (Cached - Fallback)",
-          isCached: true,
-          error: "Failed to fetch fresh data, using cached data",
-        })
-      }
-    } catch (cacheError) {
-      console.error("Error fetching cached data:", cacheError)
-    }
-
-    // If no cached data or cache fetch fails, use the placeholder data
-    console.log("No cached data available, using placeholder data")
-
-    // Generate placeholder data
-    const placeholderPlayers = generatePlaceholderData()
-
-    return NextResponse.json({
-      players: placeholderPlayers,
-      lastUpdated: new Date().toISOString(),
-      source: "MLB API (Placeholder - API Error)",
-      isPlaceholder: true,
-      error: error.message || "Failed to fetch MLB data",
-    })
+    logger.error("Error fetching MLB data:", error)
+    throw error // Rethrow the error - no fallback to mock data
   }
 }
 
-// Generate placeholder data as a fallback
-function generatePlaceholderData() {
-  // This is the same placeholder data you had before
-  return [
-    // Tier 1 players
-    { id: "p592450", name: "Aaron Judge", team: "NYY", hr2025: 12, position: "RF" },
-    { id: "p660271", name: "Shohei Ohtani", team: "LAD", hr2025: 14, position: "DH" },
-    { id: "p624413", name: "Pete Alonso", team: "NYM", hr2025: 11, position: "1B" },
-    { id: "p656941", name: "Kyle Schwarber", team: "PHI", hr2025: 13, position: "LF" },
-    { id: "p621566", name: "Matt Olson", team: "ATL", hr2025: 15, position: "1B" },
-    { id: "p670541", name: "Yordan Alvarez", team: "HOU", hr2025: 10, position: "DH" },
-    // Add more placeholder players as needed
-    // ...
-  ]
-}
+// Update the code to explicitly use 2025 season
+// function generateMlbData() {
+//   return [
+//     // Tier 1 players
+//     { id: "p592450", name: "Aaron Judge", team: "NYY", hr2025: 15, position: "RF" },
+//     { id: "p660271", name: "Shohei Ohtani", team: "LAD", hr2025: 16, position: "DH" },
+//     { id: "p624413", name: "Pete Alonso", team: "NYM", hr2025: 10, position: "1B" },
+//     { id: "p656941", name: "Kyle Schwarber", team: "PHI", hr2025: 9, position: "LF" },
+//     { id: "p621566", name: "Matt Olson", team: "ATL", hr2025: 7, position: "1B" },
+//     { id: "p670541", name: "Yordan Alvarez", team: "HOU", hr2025: 8, position: "DH" },
 
+//     // Tier 2 players
+//     { id: "p545361", name: "Mike Trout", team: "LAA", hr2025: 11, position: "CF" },
+//     { id: "p665489", name: "Vladimir Guerrero Jr.", team: "TOR", hr2025: 8, position: "1B" },
+//     { id: "p665742", name: "Juan Soto", team: "NYY", hr2025: 9, position: "RF" },
+//     { id: "p666969", name: "Adolis García", team: "TEX", hr2025: 7, position: "RF" },
+//     { id: "p605141", name: "Mookie Betts", team: "LAD", hr2025: 5, position: "RF" },
+//     { id: "p547180", name: "Bryce Harper", team: "PHI", hr2025: 6, position: "1B" },
+
+//     // Tier 3 players
+//     { id: "p646240", name: "Rafael Devers", team: "BOS", hr2025: 9, position: "3B" },
+//     { id: "p606192", name: "Teoscar Hernández", team: "LAD", hr2025: 8, position: "RF" },
+//     { id: "p519317", name: "Giancarlo Stanton", team: "NYY", hr2025: 7, position: "DH" },
+//     { id: "p677776", name: "Bobby Witt Jr.", team: "KC", hr2025: 9, position: "SS" },
+//     { id: "p542303", name: "Marcell Ozuna", team: "ATL", hr2025: 10, position: "DH" },
+//     { id: "p669477", name: "Gunnar Henderson", team: "BAL", hr2025: 8, position: "SS" },
+
+//     // Wildcard players
+//     { id: "p665742", name: "Ronald Acuña Jr.", team: "ATL", hr2025: 5, position: "RF" },
+//     { id: "p665487", name: "Fernando Tatis Jr.", team: "SD", hr2025: 6, position: "RF" },
+//     { id: "p700022", name: "Julio Rodríguez", team: "SEA", hr2025: 7, position: "CF" },
+//     { id: "p682998", name: "Corbin Carroll", team: "ARI", hr2025: 5, position: "LF" },
+//     { id: "p666023", name: "Christopher Morel", team: "CHC", hr2025: 6, position: "3B" },
+//     { id: "p656349", name: "Brent Rooker", team: "OAK", hr2025: 8, position: "DH" },
+//     { id: "p673357", name: "Luis Robert Jr.", team: "CWS", hr2025: 8, position: "CF" },
+//     { id: "p641355", name: "Cody Bellinger", team: "CHC", hr2025: 6, position: "CF" },
+//     { id: "p518692", name: "Freddie Freeman", team: "LAD", hr2025: 6, position: "1B" },
+//     { id: "p542432", name: "José Ramírez", team: "CLE", hr2025: 8, position: "3B" },
+//     { id: "p592518", name: "Manny Machado", team: "SD", hr2025: 8, position: "3B" },
+//     { id: "p663586", name: "Austin Riley", team: "ATL", hr2025: 7, position: "3B" },
+//     { id: "p571448", name: "Nolan Arenado", team: "STL", hr2025: 5, position: "3B" },
+//     { id: "p642715", name: "Willy Adames", team: "MIL", hr2025: 7, position: "SS" },
+//     { id: "p596019", name: "Francisco Lindor", team: "NYM", hr2025: 10, position: "SS" },
+//     { id: "p608369", name: "Corey Seager", team: "TEX", hr2025: 11, position: "SS" },
+//     { id: "p571771", name: "Enrique (Kike) Hernandez", team: "LAD", hr2025: 4, position: "2B/OF" },
+//   ]
+// }
+
+// Make sure we're using hr2025 when processing player stats
+const currentYear = 2025 // Explicitly set to 2025
