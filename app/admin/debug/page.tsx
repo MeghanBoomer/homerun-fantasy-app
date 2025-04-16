@@ -150,13 +150,16 @@ export default function DebugPage() {
                   )}
 
                   {updateResult.teams && updateResult.teams.length > 0 && (
-                    <div className="mt-2 max-h-40 overflow-y-auto text-xs">
-                      <p className="font-medium">Teams Updated:</p>
-                      {updateResult.teams.map((team, index) => (
-                        <div key={index} className="py-1 border-t border-border/30">
-                          {team.name}: {team.previousHR} → {team.newHR} HRs
-                        </div>
-                      ))}
+                    <div className="mt-2 text-xs">
+                      <p>Updated {updateResult.teams.length} teams</p>
+                      <p>Data Source: {updateResult.dataSource}</p>
+                      <div className="mt-2 max-h-40 overflow-y-auto">
+                        {updateResult.teams.map((team: any, index: number) => (
+                          <div key={index} className="py-1 border-t border-border/30">
+                            {team.name}: {team.previousHR} → {team.newHR} HRs
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
