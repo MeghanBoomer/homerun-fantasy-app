@@ -33,10 +33,11 @@ export default function DebugPage() {
       let data
       try {
         data = await response.json()
-      } catch (jsonError) {
+      } catch (error) {
+        const jsonError = error as Error
         const responseText = await response.text()
         throw new Error(
-          `Failed to parse response as JSON: ${jsonError.message}. Response: ${responseText.substring(0, 200)}...`,
+          `Failed to parse response as JSON: ${jsonError.message || "Unknown error"}. Response: ${responseText.substring(0, 200)}...`,
         )
       }
 

@@ -29,7 +29,13 @@ export default function ApiTestPage() {
       const contentType = response.headers.get("content-type")
 
       if (contentType && contentType.includes("application/json")) {
-        const data = await response.json()
+        let data
+        try {
+          data = await response.json()
+        } catch (error) {
+          const jsonError = error as Error
+          // Now use jsonError.message safely
+        }
         setResult({
           success: true,
           status: response.status,
