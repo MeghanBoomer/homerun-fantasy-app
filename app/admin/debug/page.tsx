@@ -228,7 +228,7 @@ export default function DebugPage() {
                   {mlbResult.allPlayers && mlbResult.allPlayers.length > 0 && (
                     <div className="mt-2 max-h-40 overflow-y-auto text-xs">
                       <p className="font-medium">Sample Players:</p>
-                      {mlbResult.allPlayers.slice(0, 10).map((player, index) => (
+                      {mlbResult.allPlayers.slice(0, 10).map((player: any, index: number) => (
                         <div key={index} className="py-1 border-t border-border/30">
                           {player.name} ({player.team}): {player.hr2025} HRs
                         </div>

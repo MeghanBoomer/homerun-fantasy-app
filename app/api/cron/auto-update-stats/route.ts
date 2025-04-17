@@ -69,7 +69,7 @@ export async function GET(request: Request) {
       let totalHR = 0
       const playerHRs = []
 
-      teamPlayers.forEach((player: { id?: string; name?: string }) => {
+      teamPlayers.forEach((player: any) => {
         if (player && player.id) {
           const playerStats = players.find((p: { id: string; hr2025: number }) => p.id === player.id)
           const hr = playerStats ? playerStats.hr2025 : 0 // Use hr2025 for the 2025 season
